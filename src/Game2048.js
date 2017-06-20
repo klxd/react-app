@@ -8,14 +8,37 @@ class Game2048 extends Component {
 
   componentWillMount() {
     document.addEventListener("keydown", this.onKeyDown.bind(this));
+    document.addEventListener("touchstart", function (event) {
+      this.touchStartX = event.changedTouches[0].pageX;
+      this.touchStartY = event.changedTouches[0].pageY;
+    }.bind(this));
+    document.addEventListener("touchend", this.onTouchEnd);
   }
 
-  onKeyDown = (keyBoardEvent) => {
-    let [isChange, ] = this.movePanel(keyBoardEvent.code);
-    if (isChange > 0) {
-      this.getNewNum();
+  onTouchEnd = (event) => {
+    this.touchEndX = event.changedTouches[0].pageX;
+    this.touchEndY = event.changedTouches[0].pageY;
+    let x = this.touchEndX - this.touchStartX;
+    let y = this.touchEndY - this.touchStartY;
+    let direction = null;
+    if (Math.abs(x) > Math.abs(y)) {
+      direction = x > 0 ? 'ArrowRight' : 'ArrowLeft';
+    } else {
+      direction = y > 0 ? 'ArrowDown' : 'ArrowUp';
     }
-    this.setState({});
+
+    this.onMove(direction);
+  };
+
+  onKeyDown = (keyBoardEvent) => {
+    this.onMove(keyBoardEvent.code)
+  };
+
+  onMove = (direction) => {
+    if (this.movePanel(direction)) {
+      this.getNewNum();
+      this.setState({});
+    }
   };
 
   init = () => {
@@ -56,81 +79,95 @@ class Game2048 extends Component {
   }
 
   movePanel = (direction) => {
-    let isAsc = true, isRow = true;
+    let degree = 0;
+    let isChange = false;
     switch (direction) {
       case 'ArrowLeft':
         break;
       case 'ArrowRight':
-        isAsc = false;
+        degree = 180;
         break;
       case 'ArrowUp':
-        isRow = false;
+        degree = 90;
         break;
       case 'ArrowDown':
-        isAsc = false;
-        isRow = false;
+        degree = 270;
         break;
       default:
-        return 0;
+        return isChange;
     }
-    let newScore = 0;
-    let isChange = false;
-    for (let i = 0; i < 4; i++) {
-      let j = isAsc ? 0 : 3;
-      let step = isAsc ? 1 : -1;
-      while ((isAsc && j < 3) || (!isAsc && j > 0)) {
-        let nextI = i;
-        let nextJ = j + step;
-        if (!isRow) {
-          [i, j] = [j, i];
-          [nextI, nextJ] = [nextJ, nextI];
-        }
-        if (this.arr[i][j] !== 0 && this.arr[i][j] === this.arr[nextI][nextJ]) {
-          this.arr[i][j] *= 2;
-          this.arr[nextI][nextJ] = 0;
-          newScore += this.arr[i][j];
-          isChange = true;
-        }
-        [i, j] = isRow ? [i, j] : [j, i];
-        j += step;
-      }
-      j = isAsc ? 0 : 3;
-      while ((isAsc && j < 3) || (!isAsc && j > 0)) {
-        [i, j] = isRow ? [i, j] : [j, i];
-        if (this.arr[i][j] === 0) {
-          let nextI = isRow ? i : i + step;
-          let nextJ = isRow ? j + step : j;
-          while (0 <= nextJ && nextJ <= 3 && 0 <= nextI && nextI <= 3) {
-            if (this.arr[nextI][nextJ] !== 0) {
-              this.arr[i][j] = this.arr[nextI][nextJ];
-              this.arr[nextI][nextJ] = 0;
-              isChange = true;
-              break;
-            }
-            isRow ? nextJ += step : nextI += step;
-          }
-        }
-        [i, j] = isRow ? [i, j] : [j, i];
-        j += step;
-      }
-    }
-    return [isChange, newScore];
+    this.rotate(degree);
+    isChange = this.merge();
+    this.rotate(360 - degree);
+    return isChange;
   };
 
-  showArray = () => {
+  merge = () => {
+    let isChange = false;
     for (let i = 0; i < 4; i++) {
-      console.log(this.arr[i]);
+      let newRow = [];
+      for (let j = 0; j < 4; j++) {
+        if (this.arr[i][j] !== 0) {
+          newRow.push(this.arr[i][j]);
+          if (j > 0 && this.arr[i][j - 1] === 0) {
+            isChange = true;
+          }
+        }
+      }
+      for (let j = 0; j < newRow.length - 1; j++) {
+        if (newRow[j] === newRow[j + 1]) {
+          newRow[j] *= 2;
+          newRow.splice(j + 1, 1);
+          isChange = true;
+        }
+      }
+      while (newRow.length < 4) {
+        newRow.push(0);
+      }
+      this.arr[i] = newRow;
     }
+    return isChange;
+  };
+
+  rotate = (degree) => {
+    if (degree % 360 === 0) {
+      return;
+    }
+    for (let i = 0; i < degree / 90; i++) {
+      this.rotate90();
+    }
+  };
+
+  rotate90 = () => {
+    let newArray = [];
+    for (let col = 3; col >= 0; col--) {
+      let newRow = [];
+      for (let row = 0; row < 4; row++) {
+        newRow.push(this.arr[row][col]);
+      }
+      newArray.push(newRow);
+    }
+    this.arr = newArray;
+  };
+
+  onRestart = () => {
+    this.init();
+    this.setState({});
   };
 
   render() {
 
     return (
-      <div className="grid-container">
-        {this.arr.map((row, index) => <div key={index} className="grid-row">
-            {row.map((num, index) => <div key={index} className="grid-cell">{num === 0 ? '' : num}</div>)}
-          </div>
-        )}
+      <div>
+        <button onClick={this.onRestart}>
+          Restart
+        </button>
+        <div className="grid-container">
+          {this.arr.map((row, index) => <div key={index} className="grid-row">
+              {row.map((num, index) => <div key={index} className="grid-cell">{num === 0 ? '' : num}</div>)}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
